@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Homepage: http://code.goole.com/p/coderev
+# Homepage: http://code.google.com/p/coderev
 # License: GPLv2, see "COPYING"
 #
 # Generate code review page of <workspace> vs <workspace>@HEAD, by using

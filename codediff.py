@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Homepage: http://code.goole.com/p/coderev
+# Homepage: http://code.google.com/p/coderev
 # License: GPLv2, see "COPYING"
 #
 # $Id$
