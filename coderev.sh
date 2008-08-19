@@ -6,7 +6,7 @@
 # Generate code review page of <workspace> vs <workspace>@HEAD, by using
 # `codediff.py' - a standalone diff tool
 #
-# Usage: coderev.sh [subdir ...]
+# Usage: coderev.sh [file|subdir ...]
 #
 # $Id$
 
@@ -17,7 +17,7 @@ function help
     cat << EOF
 
 Usage:
-    $PROG_NAME [-r revsion] [subdir ...]
+    $PROG_NAME [-r revsion] [file|subdir ...]
 
     \`revision' is a revision number, or symbol (PREV, BASE, HEAD), see svn
     books for details.  Default revision is revision of your working copy
