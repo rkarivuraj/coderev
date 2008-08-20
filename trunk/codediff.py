@@ -149,18 +149,18 @@ _footer_info_template = """
     </i>"""
 
 _global_dir_ignore_list = [
-    '\bCVS$',
-    '\bSCCS$',
-    '\b\\.svn$',
+    r'\bCVS$',
+    r'\bSCCS$',
+    r'\.svn$',
 ]
 
 _global_file_ignore_list = [
-    '.*\\.o$',
-    '.*\\.swp$',
-    '.*\\.bak$',
-    '.*\\.old$',
-    '.*\\~$',
-    '\\.cvsignore$',
+    r'.*\.o$',
+    r'.*\.swp$',
+    r'.*\.bak$',
+    r'.*\.old$',
+    r'.*~$',
+    r'\.cvsignore$',
 ]
 ########## globals & templates end ##########
 
