@@ -285,7 +285,7 @@ def grabDir(dir):
     plen = len(prefix)
 
     for root, dirs, files in os.walk(dir):
-        for d in dirs:
+        for d in [k for k in dirs]:
             if inIgnoreList(d, _global_dir_ignore_list):
                 dirs.remove(d)
         for f in files:
