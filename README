@@ -17,11 +17,12 @@ quite simple and small toolkit that can
 
 == Status ==
 
-Basic function is alreay implemented on top of python difflib.
+Basic function is already implemented on top of python difflib.
 
 == Usage ==
 
-Download from http://code.google.com/p/coderev/downloads/list and extract the
+Checkout trunk revision http://code.google.com/p/coderev/source/checkout or
+download from http://code.google.com/p/coderev/downloads/list and extract the
 tarball to your disk, there are two tools present for you - codediff.py (to
 compare files/dirs) and coderev.sh (to generate code review page on your svn
 work space).
@@ -57,6 +58,8 @@ work space).
 
 * coderev.sh usage
 
+    (optional) cp coderevrc.sample ~/.coderevrc, customize your own
+    cd your-workspace
     coderev.sh [-r revsion] [file|subdir ...]
 
     `revision' is a revision number, or symbol (PREV, BASE, HEAD), see svn
