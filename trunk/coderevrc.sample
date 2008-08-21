@@ -1,0 +1,10 @@
+# Copy to ~/.coderevrc, then customize with your own choices
+#
+
+WEB_HOST="example.org"
+SSH_USER="me"
+HOST_DIR="~/public_html/coderev"
+WEB_URL="http://$WEB_HOST/~$SSH_USER/coderev"
+
+# (TODO) Optional
+EDITOR="/usr/bin/vim"

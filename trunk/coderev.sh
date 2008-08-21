@@ -6,7 +6,7 @@
 # Generate code review page of <workspace> vs <workspace>@HEAD, by using
 # `codediff.py' - a standalone diff tool
 #
-# Usage: coderev.sh [file|subdir ...]
+# Usage: cd your-workspace; coderev.sh [file|subdir ...]
 #
 # $Id$
 
@@ -42,6 +42,31 @@ EOF
     return 0
 }
 
+# Return code:
+#   0 - Unknown
+#   1 - SVN
+#   2 - CVS
+#
+function determine_vcs
+{
+    [[ -f .svn/entries ]] && return 1
+    [[ -f CVS/Entries ]] && return 2
+    return 0
+}
+
+################### TODO ###########################
+# VCS OPTS: 
+#   get_repository
+#   get_project_name
+#   get_head_revision
+#   get_working_revision
+#   get_active_list
+#   get_diff
+#
+################### TODO ###########################
+
+# Main Proc
+#
 while getopts "r:h" op; do
     case $op in
         r) REV="$OPTARG" ;;
@@ -52,6 +77,7 @@ done
 
 shift $((OPTIND - 1))
 SUBDIRS="$@"
+[[ -n "$SUBDIRS" ]] || SUBDIRS="."
 
 [[ -n "$REV" ]] && SVN_OPT="-r $REV"
 
@@ -110,30 +136,25 @@ echo
 #
 rm -rf $LIST $DIFF $BASE_SRC
 
-
-##############################################################################
+# Copy to web host
 #
-# Customize your webdir to save coderev:
-#
-# 1. define WEBHOST, SSH_USER, HOST_DIR and WEBDIR
-# 2. Comment out the line ":<< \__copy_to_webserver__" below
-#
-##############################################################################
+[[ -r ~/.coderevrc ]] || exit 0
 
-: << __copy_to_webserver__
+. ~/.coderevrc || {
+    echo "Reading ~/.coderevrc failed." >&2
+    exit 1
+}
 
-WEBHOST=example.org
-SSH_USER=me
-HOST_DIR='~/public_html/coderev'
-WEBDIR="http://$WEBHOST/~$SSH_USER/coderev"
+: ${WEB_HOST?"WEB_HOST not defined."}
+: ${SSH_USER?"SSH_USER not defined."}
+: ${HOST_DIR?"HOST_DIR not defined."}
+: ${WEB_URL?"WEB_URL not defined."}
 
-scp -r $CODEREV ${SSH_USER}@${WEBHOST}:$HOST_DIR/ || exit 1
+scp -r $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
 
 echo
 echo "Coderev link:"
-echo "$WEBDIR/$(basename $CODEREV)"
+echo "$WEB_URL/$(basename $CODEREV)"
 echo
 
 exit 0
-
-__copy_to_webserver__
