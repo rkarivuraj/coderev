@@ -11,27 +11,32 @@
 # $Id$
 
 PROG_NAME=$(basename $0)
+BINDIR=$(cd $(dirname $0) && pwd -L) || exit 1
+CODEDIFF=$BINDIR/codediff.py
 
 function help
 {
     cat << EOF
 
 Usage:
-    $PROG_NAME [-r revsion] [file|subdir ...]
+    $PROG_NAME [-r revsion] [-w width] [file|subdir ...]
 
-    \`revision' is a revision number, or symbol (PREV, BASE, HEAD), see svn
-    books for details.  Default revision is revision of your working copy
-    (aka. BASE)
+    \`revision' is a revision number, or symbol (PREV, BASE, HEAD) in svn,
+    see svn books for details.  Default revision is revision of your working
+    copy
+
+    \`width' is a number to make code review pages wrap in specific column
 
     Default \`subdir' is working dir.
 
 Example 1:
-    $PROG_NAME bin lib
+    $PROG_NAME -w80 bin lib
 
-    Generate coderev based on your working copy.  If you are working on the
-    most up-to-date version, this is suggested way (faster).
+    Generate coderev based on your working copy, web pages wrap in column 80.
+    If you are working on the most up-to-date version, this is suggested way
+    (faster).
 
-Example 2:
+Example 2 (for SVN):
     $PROG_NAME -r HEAD bin lib
 
     Generate coderev based on HEAD revision (up-to-date version in repository),
@@ -42,94 +47,120 @@ EOF
     return 0
 }
 
-# Return code:
-#   0 - Unknown
-#   1 - SVN
-#   2 - CVS
+####################  VCS Operations Begin #################### 
+
+# Return code: 0 - Unknown, 1 - SVN, 2 - CVS
 #
-function determine_vcs
+function detect_vcs
 {
     [[ -f .svn/entries ]] && return 1
     [[ -f CVS/Entries ]] && return 2
     return 0
 }
 
-################### TODO ###########################
-# VCS OPTS: 
-#   get_repository
-#   get_project_name
-#   get_head_revision
-#   get_working_revision
-#   get_active_list
-#   get_diff
+function set_vcs_ops
+{
+    local i=${1?}
+    local vcs_opt=${VCS_OPS_TABLE[i]}
+
+    eval vcs_get_banner=\${$vcs_opt[0]}
+    eval vcs_get_repository=\${$vcs_opt[1]}
+    eval vcs_get_project_path=\${$vcs_opt[2]}
+    eval vcs_get_working_revision=\${$vcs_opt[3]}
+    eval vcs_get_active_list=\${$vcs_opt[4]}
+    eval vcs_get_diff=\${$vcs_opt[5]}
+    eval vcs_get_diff_opt=\${$vcs_opt[6]}
+}
+
+# VCS Operations: 
+#   get_banner                        - print banner, return 1 if not supported
+#   get_repository                    - print repository
+#   get_project_path                  - print project path without repository
+#   get_working_revision pathname ... - print working revision
+#   get_active_list pathname ...      - print active file list
+#   get_diff [diff_opt] pathname ...  - get diffs for active files
+#   get_diff_opt                      - print diff option and args
+
+# Unknown ops just defined here, others see libxxx.sh
 #
-################### TODO ###########################
+UNKNOWN_OPS=( unknown_get_banner : : : : : : )
+
+function unknown_get_banner
+{
+    echo "unknown"
+    return 1
+}
+
+VCS_OPS_TABLE=( UNKNOWN_OPS  SVN_OPS  CVS_OPS )
+
+. $BINDIR/libsvn.sh || exit 1
+. $BINDIR/libcvs.sh || exit 1
+
+# Detect VCS (Version Control System) and set handler
+#
+detect_vcs
+set_vcs_ops $?
+
+####################  VCS Operations End #################### 
 
 # Main Proc
 #
-while getopts "r:h" op; do
+while getopts "hr:w:" op; do
     case $op in
-        r) REV="$OPTARG" ;;
         h) help; exit 0 ;;
+        r) REV_ARG="$OPTARG" ;;
+        w) CODEDIFF_OPT="-w $OPTARG" ;;
         ?) help; exit 1 ;;
     esac
 done
-
 shift $((OPTIND - 1))
-SUBDIRS="$@"
-[[ -n "$SUBDIRS" ]] || SUBDIRS="."
+PATHNAME="${@:-.}"
 
-[[ -n "$REV" ]] && SVN_OPT="-r $REV"
+BANNER=$($vcs_get_banner) || {
+    echo "Unsupported version control system ($BANNER)." >&2
+    exit 1
+}
+echo "Version control system \"$BANNER\" detected."
 
-# Get codediff path
+# Retrive information
 #
-BINDIR=$(cd $(dirname $0) && pwd -L) || exit 1
-CODEDIFF=$BINDIR/codediff.py
-
-# Retrive SVN information
-#
-echo "Retriving SVN information ..."
-URL=$(svn info | grep '^URL:' | awk '{print $2}') || exit 1
-WS_NAME=$(basename "$URL")
-WS_REV=$(svn info | grep 'Revision:' | awk '{print $2}') || exit 1
-BASE_REV=$(svn info $SVN_OPT | grep 'Revision:' | awk '{print $2}') || exit 1
-echo "URL     : $URL"
-echo "WS_REV  : $WS_REV"
-echo "BASE_REV: $BASE_REV"
-
+echo "Retriving information ..."
+PROJ_PATH=$($vcs_get_project_path)
+WS_NAME=$(basename $PROJ_PATH)
+WS_REV=$($vcs_get_working_revision $PATHNAME)
+echo "Repository       : $($vcs_get_repository)"
+echo "Project path     : $PROJ_PATH"
+echo "Working revision : $WS_REV"
 
 # Prepare file list and base source
 #
-LIST=$(mktemp /tmp/list.XXXXXX) || exit 1
-DIFF=$(mktemp /tmp/diff.XXXXXX) || exit 1
-BASE_SRC="/tmp/${WS_NAME}@${BASE_REV}"
+TMPDIR=$(mktemp -d /tmp/coderev.XXXXXX) || exit 1
+LIST="$TMPDIR/activelist"
+DIFF="$TMPDIR/diffs"
+BASE_SRC="$TMPDIR/$WS_NAME-base"
 
-for file in $(svn st $SUBDIRS | grep '^[A-Z]' | awk '{print $2}'); do
-    [[ -d $file ]] && continue
-    echo $file >> $LIST || exit 1
-done
-
-echo "Active file list:"
-echo "============================"
+$vcs_get_active_list $PATHNAME > $LIST || exit 1
+echo "==========  Active file list  =========="
 cat $LIST
-echo "============================"
+echo "========================================"
 
-# Generate $base_src
+# Generate $BASE_SRC
 #
 mkdir -p $BASE_SRC || exit 1
 tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
 
 echo "Retriving diffs ..."
-svn diff $SVN_OPT $(cat $LIST) > $DIFF || exit 1
-cat $DIFF | patch -NER -p0 -d $BASE_SRC || exit 1
+VCS_REV_OPT=""
+[[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
+$vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
+patch -NER -p0 -d $BASE_SRC < $DIFF || exit 1
 
 # Generate coderev
 #
-CODEREV=/tmp/${WS_NAME}-diff-${BASE_REV}
-cat $LIST | $CODEDIFF -o $CODEREV -w80 -y -f- $BASE_SRC . || exit 1
-
-echo
-echo "Coderev generated under $CODEREV"
+echo "Generating code review ..."
+CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-diff
+$CODEDIFF $CODEDIFF_OPT -o $CODEREV -y -f- $BASE_SRC . < $LIST || exit 1
+echo "Coderev pages generated at $CODEREV"
 echo
 
 # Cleanup
@@ -138,7 +169,12 @@ rm -rf $LIST $DIFF $BASE_SRC
 
 # Copy to web host
 #
-[[ -r ~/.coderevrc ]] || exit 0
+[[ -r ~/.coderevrc ]] || {
+    echo "[*] Hint: if you want to copy coderev pages to a remote host"
+    echo "    automatically, see coderevrc.sample"
+    echo
+    exit 0
+}
 
 . ~/.coderevrc || {
     echo "Reading ~/.coderevrc failed." >&2
