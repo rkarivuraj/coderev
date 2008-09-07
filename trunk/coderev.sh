@@ -159,7 +159,7 @@ DIFF="$TMPDIR/diffs"
 BASE_SRC="$TMPDIR/$WS_NAME-base"
 
 $vcs_get_active_list $PATHNAME > $LIST || exit 1
-[[ -s "$LIST" ]] && {
+[[ -s "$LIST" ]] || {
     echo "No active file found."
     exit 0
 }
