@@ -6,5 +6,5 @@ SSH_USER="me"
 HOST_DIR="~/public_html/coderev"
 WEB_URL="http://$WEB_HOST/~$SSH_USER/coderev"
 
-# (TODO) Optional
+# Optional
 EDITOR="/usr/bin/vim"

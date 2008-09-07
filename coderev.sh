@@ -19,13 +19,21 @@ function help
     cat << EOF
 
 Usage:
-    $PROG_NAME [-r revsion] [-w width] [file|subdir ...]
+    $PROG_NAME [-r revsion] [-w width] [-o outdir] [-y] \\
+               [-F comment-file | -m 'comments'] [file|subdir ...]
 
     \`revision' is a revision number, or symbol (PREV, BASE, HEAD) in svn,
     see svn books for details.  Default revision is revision of your working
-    copy
+    copy.
 
-    \`width' is a number to make code review pages wrap in specific column
+    \`width' is a number to make code review pages wrap in specific column.
+
+    \`outdir' is the output dir to save code review pages, '-y' is to force
+    overwrite if dest dir exists.
+
+    \`comment-file' is a file to read comments.
+
+    \`comments' is inline comments, note '-m' precedes '-F'.
 
     Default \`subdir' is working dir.
 
@@ -34,13 +42,13 @@ Example 1:
 
     Generate coderev based on your working copy, web pages wrap in column 80.
     If you are working on the most up-to-date version, this is suggested way
-    (faster).
+    (faster).  Output pages will be saved to a temp directory.
 
 Example 2 (for SVN):
-    $PROG_NAME -r HEAD bin lib
+    $PROG_NAME -r HEAD -o ~/public_html/coderev bin lib
 
     Generate coderev based on HEAD revision (up-to-date version in repository),
-    this will retrive diffs from SVN server so it's slower, but most safely.
+    this will retrieve diffs from SVN server so it's slower, but most safely.
 
 EOF
 
@@ -105,11 +113,22 @@ set_vcs_ops $?
 
 # Main Proc
 #
-while getopts "hr:w:" op; do
+[[ -r ~/.coderevrc ]] && {
+    . ~/.coderevrc || {
+        echo "Reading ~/.coderevrc failed." >&2
+        exit 1
+    }
+}
+
+while getopts "F:hm:o:r:w:y" op; do
     case $op in
+        F) COMMENT_FILE="$OPTARG" ;;
         h) help; exit 0 ;;
+        m) COMMENTS="$OPTARG" ;;
+        o) OUTPUT_DIR="$OPTARG" ;;
         r) REV_ARG="$OPTARG" ;;
-        w) CODEDIFF_OPT="-w $OPTARG" ;;
+        w) WRAP_NUM="$OPTARG" ;;
+        y) OVERWRITE=true ;;
         ?) help; exit 1 ;;
     esac
 done
@@ -122,9 +141,9 @@ BANNER=$($vcs_get_banner) || {
 }
 echo "Version control system \"$BANNER\" detected."
 
-# Retrive information
+# Retrieve information
 #
-echo "Retriving information ..."
+echo "Retrieving information ..."
 PROJ_PATH=$($vcs_get_project_path)
 WS_NAME=$(basename $PROJ_PATH)
 WS_REV=$($vcs_get_working_revision $PATHNAME)
@@ -149,48 +168,75 @@ echo "========================================"
 mkdir -p $BASE_SRC || exit 1
 tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
 
-echo "Retriving diffs ..."
+echo "Retrieving diffs ..."
 VCS_REV_OPT=""
 [[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
 $vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
-patch -NER -p0 -d $BASE_SRC < $DIFF || exit 1
+patch -NER -p0 -d $BASE_SRC < $DIFF || {
+    echo "Warning: reverse patch failed, possibly caused by keywords" \
+         "subsititution." >&2
+}
+
+# Form codediff options
+#
+CODEDIFF_OPT="-f $LIST"
+
+CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-diff
+[[ -n "$OUTPUT_DIR" ]] && CODEREV=$OUTPUT_DIR
+CODEDIFF_OPT="$CODEDIFF_OPT -o $CODEREV"
+
+TITLE="Coderev for $(basename $(pwd)) r$WS_REV"
+CODEDIFF_OPT="$CODEDIFF_OPT -t '$TITLE'"
+
+if [[ -z "$COMMENTS" ]]; then
+    [[ -n "$COMMENT_FILE" ]] || {
+        COMMENT_FILE="$TMPDIR/comments-$$"
+        COMMENT_TAG="~~Enter comments above. \
+This line and those below will be ignored~~"
+        echo -e "\n$COMMENT_TAG" >> $COMMENT_FILE
+        ${EDITOR:-vi} $COMMENT_FILE
+        sed -i '/^~~.*~~$/, $ d' $COMMENT_FILE
+    }
+    CODEDIFF_OPT="$CODEDIFF_OPT -F $COMMENT_FILE"
+else
+    CODEDIFF_OPT="$CODEDIFF_OPT -m '$COMMENTS'"
+fi
+
+[[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT="-w $WRAP_NUM"
+[[ -n "$OVERWRITE" ]] && CODEDIFF_OPT="$CODEDIFF_OPT -y"
 
 # Generate coderev
 #
 echo "Generating code review ..."
-CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-diff
-$CODEDIFF $CODEDIFF_OPT -o $CODEREV -y -f- $BASE_SRC . < $LIST || exit 1
-echo "Coderev pages generated at $CODEREV"
+eval $CODEDIFF $CODEDIFF_OPT $BASE_SRC . || exit 1
+echo -e "\nCoderev pages generated at $CODEREV"
 echo
 
 # Cleanup
 #
 rm -rf $LIST $DIFF $BASE_SRC
 
-# Copy to web host
+# Copy to web host if output dir is generated automatically
 #
-[[ -r ~/.coderevrc ]] || {
-    echo "[*] Hint: if you want to copy coderev pages to a remote host"
-    echo "    automatically, see coderevrc.sample"
+if [[ -z "$OUTPUT_DIR" ]]; then
+    [[ -r ~/.coderevrc ]] || {
+        echo "[*] Hint: if you want to copy coderev pages to a remote host"
+        echo "    automatically, see coderevrc.sample"
+        echo
+        exit 0
+    }
+
+    : ${WEB_HOST?"WEB_HOST not defined."}
+    : ${SSH_USER?"SSH_USER not defined."}
+    : ${HOST_DIR?"HOST_DIR not defined."}
+    : ${WEB_URL?"WEB_URL not defined."}
+
+    scp -r $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
+
     echo
-    exit 0
-}
-
-. ~/.coderevrc || {
-    echo "Reading ~/.coderevrc failed." >&2
-    exit 1
-}
-
-: ${WEB_HOST?"WEB_HOST not defined."}
-: ${SSH_USER?"SSH_USER not defined."}
-: ${HOST_DIR?"HOST_DIR not defined."}
-: ${WEB_URL?"WEB_URL not defined."}
-
-scp -r $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
-
-echo
-echo "Coderev link:"
-echo "$WEB_URL/$(basename $CODEREV)"
-echo
+    echo "Coderev link:"
+    echo "$WEB_URL/$(basename $CODEREV)"
+    echo
+fi
 
 exit 0
