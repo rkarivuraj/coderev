@@ -60,7 +60,8 @@ function cvs_get_diff
     done
     shift $((OPTIND - 1))
 
-    cvs diff -uN $diff_opt $@
+    # Use default format to avoid keyword subsititution issue
+    cvs diff -N $diff_opt $@
     return 0 # cvs diff return 1 when there're changes
 }
 
