@@ -542,8 +542,10 @@ class CodeDiffer:
                 if e.errno != errno.EEXIST:
                     raise CodeDifferError, 'OSError: ' + str(e)
 
-            stat1 = os.lstat(obj1)
-            stat2 = os.lstat(obj2)
+            stat1 = None
+            stat2 = None
+            if os.path.exists(obj1): stat1 = os.lstat(obj1)
+            if os.path.exists(obj2): stat2 = os.lstat(obj2)
 
             if stat1 and not stat2: # deleted
                 print '%-40s |' % f,
@@ -554,7 +556,7 @@ class CodeDiffer:
                     continue
                 print
                 write_file(target + '-.html', convert_to_html(obj1))
-                data_row = _deleted_data_row_template % {'pathname': f}
+                data_row = self._deleted_data_row_template % {'pathname': f}
                 summary['deleted'] += 1
                 has_diff = True
 
@@ -566,7 +568,7 @@ class CodeDiffer:
                     continue
                 print
                 write_file(target + '.html', convert_to_html(obj2))
-                data_row = _added_data_row_template % {'pathname': f}
+                data_row = self._added_data_row_template % {'pathname': f}
                 summary['added'] += 1
                 has_diff = True
 
