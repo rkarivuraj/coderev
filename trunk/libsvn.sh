@@ -58,7 +58,7 @@ function svn_get_diff
     shift $((OPTIND - 1))
 
     # Use diff -u0 to avoid keyword subsititution issue
-    svn diff  --diff-cmd /usr/bin/diff -x -u0 $diff_opt $@ \
+    svn diff  --diff-cmd /usr/bin/diff -x -U0 $diff_opt $@ \
         | sed '/^Property changes on:/,/^$/d' | grep -v '^$'
 }
 
