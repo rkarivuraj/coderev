@@ -59,6 +59,12 @@ Example 3:
     Generate coderev with the patch set input by \`svn diff', use content in
     file \`comments' as comments.
 
+Example 4 (for SVN):
+    svn diff -r PREV foo bar/ | $PROG_NAME -w80 -F comments -
+
+    Generate coderev based on diffs between PREV revision and working files
+    (modified or not), use content in file \`comments' as comments.
+
 EOF
 
     return 0
@@ -166,11 +172,11 @@ BANNER=$($vcs_get_banner) || {
     echo "Unsupported version control system ($BANNER)." >&2
     exit 1
 }
-echo "Version control system \"$BANNER\" detected."
+echo -e "\nVersion control system \"$BANNER\" detected."
 
 # Retrieve information
 #
-echo "Retrieving information ..."
+echo -e "\nRetrieving information..."
 PROJ_PATH=$($vcs_get_project_path)
 WS_NAME=$(basename $PROJ_PATH)
 if [[ $PATHNAME == "-" ]]; then
@@ -178,9 +184,9 @@ if [[ $PATHNAME == "-" ]]; then
 else
     WS_REV=$($vcs_get_working_revision $PATHNAME)
 fi
-echo "Repository       : $($vcs_get_repository)"
-echo "Project path     : $PROJ_PATH"
-echo "Working revision : $WS_REV"
+echo "  * Repository       : $($vcs_get_repository)"
+echo "  * Project path     : $PROJ_PATH"
+echo "  * Working revision : $WS_REV"
 
 # Prepare file list and base source
 #
@@ -190,6 +196,7 @@ DIFF="$TMPDIR/diffs"
 BASE_SRC="$TMPDIR/$WS_NAME-base"
 
 if [[ $PATHNAME == "-" ]]; then
+    echo -e "\nReceiving diffs..."
     # TODO: consider format other than svn diff
     sed '/^Property changes on:/,/^$/d' | grep -v '^$' > $DIFF || exit 1
     get_list_from_patch $DIFF > $LIST || exit 1
@@ -201,9 +208,8 @@ fi
     echo "No active file found."
     exit 0
 }
-echo "==========  Active file list  =========="
-cat $LIST
-echo "========================================"
+echo -e "\nActive file list:"
+sed 's/^/  * /' $LIST
 
 # Generate $BASE_SRC
 #
@@ -212,18 +218,18 @@ tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
 
 if [[ $PATHNAME == "-" ]]; then
     PATCH_LVL=${PATCH_LVL:-0}
-    patch -NE -p $PATCH_LVL -d $BASE_SRC < $DIFF
 else
-    echo "Retrieving diffs ..."
+    echo -e "\nRetrieving diffs..."
     VCS_REV_OPT=""
     [[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
     $vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
-    patch -NER -p 0 -d $BASE_SRC < $DIFF
+    PATCH_LVL=0
 fi
 
-(($? == 0)) || {
-    echo "Warning: patch failed, possibly caused by keywords" \
-         "subsititution." >&2
+# Sometimes people diff with previous revision, so '-R' is needed
+#
+patch -ER -p $PATCH_LVL -d $BASE_SRC < $DIFF || {
+    echo "Warning: patch failed, possibly caused by keyword subsititution." >&2
 }
 
 # Form codediff options
@@ -247,6 +253,9 @@ This line and those below will be ignored--"
         echo -e "\nActive file list:" >> $COMMENT_FILE
         cat $LIST | sed 's/^/  /' >> $COMMENT_FILE
         echo -e "\n# vim:set ft=svn:" >> $COMMENT_FILE
+
+        # Redirect stdin, otherwise vim complains & term corrupt after quit vim
+        [[ $PATHNAME == "-" ]] && exec < /dev/tty
         ${EDITOR:-vi} $COMMENT_FILE
         sed -i '/^--.*--$/, $ d' $COMMENT_FILE
     }
@@ -260,14 +269,13 @@ fi
 
 # Generate coderev
 #
-echo "Generating code review ..."
+echo -e "\nGenerating code review..."
 if [[ $PATHNAME == "-" ]]; then
     eval $CODEDIFF $CODEDIFF_OPT . $BASE_SRC || exit 1
 else
     eval $CODEDIFF $CODEDIFF_OPT $BASE_SRC . || exit 1
 fi
 echo -e "\nCoderev pages generated at $CODEREV"
-echo
 
 # Cleanup
 #
@@ -277,6 +285,7 @@ rm -rf $LIST $DIFF $BASE_SRC
 #
 if [[ -z "$OUTPUT_DIR" ]]; then
     [[ -r ~/.coderevrc ]] || {
+        echo
         echo "[*] Hint: if you want to copy coderev pages to a remote host"
         echo "    automatically, see coderevrc.sample"
         echo
@@ -288,10 +297,10 @@ if [[ -z "$OUTPUT_DIR" ]]; then
     : ${HOST_DIR?"HOST_DIR not defined."}
     : ${WEB_URL?"WEB_URL not defined."}
 
-    scp -r $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
+    echo -e "\nCopying to ${SSH_USER}@${WEB_HOST}:$HOST_DIR/..."
+    scp -rpq $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
 
-    echo
-    echo "Coderev link:"
+    echo -e "\nCoderev link:"
     echo "$WEB_URL/$(basename $CODEREV)"
     echo
 fi
