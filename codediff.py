@@ -611,7 +611,7 @@ class CodeDiffer:
                                    self.__wrap_num, self.__context_line)
                 write_file(target + '.fdiff.html', html)
 
-                print '%-40s |' % f,
+                print '  * %-40s |' % f,
                 print 'Changed/Deleted/Added: %d/%d/%d' % (\
                     file_summary['changed'],
                     file_summary['deleted'],
