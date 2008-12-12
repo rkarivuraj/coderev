@@ -6,7 +6,7 @@
 # Generate code review page of <workspace> vs <workspace>@HEAD, by using
 # `codediff.py' - a standalone diff tool
 #
-# Usage: cd your-workspace; coderev.sh [file|subdir ...]
+# Usage: cd your-workspace; coderev.sh [ file_or_dir... | - ]
 #
 # $Id$
 
@@ -20,7 +20,7 @@ function help
 
 Usage:
     $PROG_NAME [-r revsion] [-w width] [-o outdir] [-y] \\
-               [-F comment-file | -m 'comments'] [file|subdir ...]
+               [-F comment-file | -m 'comments'] [ file_or_dir... | - ]
 
     \`revision' is a revision number, or symbol (PREV, BASE, HEAD) in svn,
     see svn books for details.  Default revision is revision of your working
@@ -35,25 +35,51 @@ Usage:
 
     \`comments' is inline comments, note '-m' precedes '-F'.
 
-    Default \`subdir' is working dir.
+    \`file_or_dir' is file/subdir list you want to diff, use \`-' to receive
+    a patch set from stdin instead, default is \`.' (current dir).
 
 Example 1:
     $PROG_NAME -w80 bin lib
 
-    Generate coderev based on your working copy, web pages wrap in column 80.
-    If you are working on the most up-to-date version, this is suggested way
-    (faster).  Output pages will be saved to a temp directory.
+    Generate coderev based on diffs between your base revision and locally
+    modified revision, web pages wrap in column 80.  If you are working on the
+    most up-to-date version, this is suggested way (faster).  Output pages
+    will be saved to a temp directory.
 
 Example 2 (for SVN):
     $PROG_NAME -r HEAD -o ~/public_html/coderev bin lib
 
-    Generate coderev based on HEAD revision (up-to-date version in repository),
-    this will retrieve diffs from SVN server so it's slower, but most safely.
+    Generate coderev based on diffs between HEAD revision (up-to-date version
+    in repository) and locally modified revision, this will retrieve diffs
+    from SVN server so it's slower, but most safely.
+
+Example 3:
+    svn diff foo bar/ | $PROG_NAME -w80 -F comments -
+
+    Generate coderev with the patch set input by \`svn diff', use content in
+    file \`comments' as comments.
 
 EOF
 
     return 0
 }
+
+function get_list_from_patch
+{
+    local patch=${1?"patch file required"}
+
+    if [[ $(head -1 $patch) =~ ^Index:\ .+ ]]; then
+        grep '^Index: ' $patch | sed 's/.* //'
+    elif [[ $(head -1 $patch) =~ ^diff\ .+\ .+ ]]; then
+        grep '^diff .+ .+' $patch | sed 's/.* //'
+    else
+        echo "Unknown patch format." >&2
+        return 1
+    fi
+
+    return 0
+}
+
 
 ####################  VCS Operations Begin #################### 
 
@@ -126,6 +152,7 @@ while getopts "F:hm:o:r:w:y" op; do
         h) help; exit 0 ;;
         m) COMMENTS="$OPTARG" ;;
         o) OUTPUT_DIR="$OPTARG" ;;
+        p) PATCH_LVL="$OPTARG" ;;
         r) REV_ARG="$OPTARG" ;;
         w) WRAP_NUM="$OPTARG" ;;
         y) OVERWRITE=true ;;
@@ -146,7 +173,11 @@ echo "Version control system \"$BANNER\" detected."
 echo "Retrieving information ..."
 PROJ_PATH=$($vcs_get_project_path)
 WS_NAME=$(basename $PROJ_PATH)
-WS_REV=$($vcs_get_working_revision $PATHNAME)
+if [[ $PATHNAME == "-" ]]; then
+    WS_REV=$($vcs_get_working_revision .)
+else
+    WS_REV=$($vcs_get_working_revision $PATHNAME)
+fi
 echo "Repository       : $($vcs_get_repository)"
 echo "Project path     : $PROJ_PATH"
 echo "Working revision : $WS_REV"
@@ -158,7 +189,14 @@ LIST="$TMPDIR/activelist"
 DIFF="$TMPDIR/diffs"
 BASE_SRC="$TMPDIR/$WS_NAME-base"
 
-$vcs_get_active_list $PATHNAME > $LIST || exit 1
+if [[ $PATHNAME == "-" ]]; then
+    # TODO: consider format other than svn diff
+    sed '/^Property changes on:/,/^$/d' | grep -v '^$' > $DIFF || exit 1
+    get_list_from_patch $DIFF > $LIST || exit 1
+else
+    $vcs_get_active_list $PATHNAME > $LIST || exit 1
+fi
+
 [[ -s "$LIST" ]] || {
     echo "No active file found."
     exit 0
@@ -172,12 +210,19 @@ echo "========================================"
 mkdir -p $BASE_SRC || exit 1
 tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
 
-echo "Retrieving diffs ..."
-VCS_REV_OPT=""
-[[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
-$vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
-patch -NER -p0 -d $BASE_SRC < $DIFF || {
-    echo "Warning: reverse patch failed, possibly caused by keywords" \
+if [[ $PATHNAME == "-" ]]; then
+    PATCH_LVL=${PATCH_LVL:-0}
+    patch -NE -p $PATCH_LVL -d $BASE_SRC < $DIFF
+else
+    echo "Retrieving diffs ..."
+    VCS_REV_OPT=""
+    [[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
+    $vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
+    patch -NER -p 0 -d $BASE_SRC < $DIFF
+fi
+
+(($? == 0)) || {
+    echo "Warning: patch failed, possibly caused by keywords" \
          "subsititution." >&2
 }
 
@@ -195,11 +240,15 @@ CODEDIFF_OPT="$CODEDIFF_OPT -t '$TITLE'"
 if [[ -z "$COMMENTS" ]]; then
     [[ -n "$COMMENT_FILE" ]] || {
         COMMENT_FILE="$TMPDIR/comments-$$"
-        COMMENT_TAG="~~Enter comments above. \
-This line and those below will be ignored~~"
+        COMMENT_TAG="--Enter comments above. \
+This line and those below will be ignored--"
         echo -e "\n$COMMENT_TAG" >> $COMMENT_FILE
+        echo -e "\n(hint: use '-F' option for comment file)" >> $COMMENT_FILE
+        echo -e "\nActive file list:" >> $COMMENT_FILE
+        cat $LIST | sed 's/^/  /' >> $COMMENT_FILE
+        echo -e "\n# vim:set ft=svn:" >> $COMMENT_FILE
         ${EDITOR:-vi} $COMMENT_FILE
-        sed -i '/^~~.*~~$/, $ d' $COMMENT_FILE
+        sed -i '/^--.*--$/, $ d' $COMMENT_FILE
     }
     CODEDIFF_OPT="$CODEDIFF_OPT -F $COMMENT_FILE"
 else
@@ -212,7 +261,11 @@ fi
 # Generate coderev
 #
 echo "Generating code review ..."
-eval $CODEDIFF $CODEDIFF_OPT $BASE_SRC . || exit 1
+if [[ $PATHNAME == "-" ]]; then
+    eval $CODEDIFF $CODEDIFF_OPT . $BASE_SRC || exit 1
+else
+    eval $CODEDIFF $CODEDIFF_OPT $BASE_SRC . || exit 1
+fi
 echo -e "\nCoderev pages generated at $CODEREV"
 echo
 
