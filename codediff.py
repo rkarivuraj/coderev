@@ -548,7 +548,7 @@ class CodeDiffer:
             if os.path.exists(obj2): stat2 = os.lstat(obj2)
 
             if stat1 and not stat2: # deleted
-                print '%-40s |' % f,
+                print '  * %-40s |' % f,
                 print 'File removed',
                 #st_mtime = time.localtime(stat1[8])
                 if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1):
@@ -561,7 +561,7 @@ class CodeDiffer:
                 has_diff = True
 
             elif not stat1 and stat2: # added
-                print '%-40s |' % f,
+                print '  * %-40s |' % f,
                 print 'New file',
                 if not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
                     print '(skipped special/binary)'
@@ -575,11 +575,11 @@ class CodeDiffer:
             elif stat1 and stat2: # same or diff
                 # do not compare special or binary file
                 if not stat.S_ISREG(stat1[0]) or is_binary_file(obj1):
-                    print '%-40s |' % f,
+                    print '  * %-40s |' % f,
                     print '(skipped, former file is special)'
                     continue
                 if not stat.S_ISREG(stat2[0]) or is_binary_file(obj2):
-                    print '%-40s |' % f,
+                    print '  * %-40s |' % f,
                     print '(skipped, latter file is binary)'
                     continue
                 if filecmp.cmp(obj1, obj2):
@@ -627,7 +627,7 @@ class CodeDiffer:
                 )
                 summary['changed'] += 1
             else: # this case occured when controlled by master file list
-                print '%-40s |' % f,
+                print '  * %-40s |' % f,
                 print 'Not found'
                 data_row = ''
 
