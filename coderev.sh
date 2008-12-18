@@ -6,7 +6,7 @@
 # Generate code review page of <workspace> vs <workspace>@HEAD, by using
 # `codediff.py' - a standalone diff tool
 #
-# Usage: cd your-workspace; coderev.sh [ file_or_dir... | - ]
+# Usage: cd your-workspace; coderev.sh [options] [file...]
 #
 # $Id$
 
@@ -19,8 +19,8 @@ function help
     cat << EOF
 
 Usage:
-    $PROG_NAME [-r revsion] [-w width] [-o outdir] [-y] \\
-               [-F comment-file | -m 'comments'] [ file_or_dir... | - ]
+    $PROG_NAME [-r revsion] [-w width] [-o outdir] [-y]  \\
+               [-F comment-file | -m 'comments ...'] [file...]
 
     \`revision' is a revision number, or symbol (PREV, BASE, HEAD) in svn,
     see svn books for details.  Default revision is revision of your working
@@ -35,8 +35,8 @@ Usage:
 
     \`comments' is inline comments, note '-m' precedes '-F'.
 
-    \`file_or_dir' is file/subdir list you want to diff, use \`-' to receive
-    a patch set from stdin instead, default is \`.' (current dir).
+    \`file' is file/subdir list you want to diff, default is \`.', note you
+    can also rediect input to a patch file.
 
 Example 1:
     $PROG_NAME -w80 bin lib
@@ -54,13 +54,13 @@ Example 2 (for SVN):
     from SVN server so it's slower, but most safely.
 
 Example 3:
-    svn diff foo bar/ | $PROG_NAME -w80 -F comments -
+    cat hotfix.patch | $PROG_NAME -p1 -m 'applying hot fix'
 
-    Generate coderev with the patch set input by \`svn diff', use content in
-    file \`comments' as comments.
+    Generate coderev with the patch set \`hotfix.patch' (\`-p1' will be passed
+    to \`patch' utility), use 'applying hot fix' as comments
 
 Example 4 (for SVN):
-    svn diff -r PREV foo bar/ | $PROG_NAME -w80 -F comments -
+    svn diff -r PREV foo bar/ | $PROG_NAME -w80 -F comments
 
     Generate coderev based on diffs between PREV revision and working files
     (modified or not), use content in file \`comments' as comments.
@@ -145,6 +145,15 @@ set_vcs_ops $?
 
 # Main Proc
 #
+COMMENT_FILE=
+COMMENTS=
+OUTPUT_DIR=
+PATCH_LVL=0
+REV_ARG=
+REVERSE_PATCH=false
+WRAP_NUM=
+OVERWRITE=false
+
 [[ -r ~/.coderevrc ]] && {
     . ~/.coderevrc || {
         echo "Reading ~/.coderevrc failed." >&2
@@ -167,6 +176,13 @@ while getopts "F:hm:o:r:w:y" op; do
 done
 shift $((OPTIND - 1))
 PATHNAME="${@:-.}"
+
+# If terminal opened fd 0 then we aren't receiving patch from stdin
+if [[ -t 0 ]]; then
+    RECV_STDIN=false
+else
+    RECV_STDIN=true
+fi
 
 BANNER=$($vcs_get_banner) || {
     echo "Unsupported version control system ($BANNER)." >&2
@@ -195,7 +211,7 @@ LIST="$TMPDIR/activelist"
 DIFF="$TMPDIR/diffs"
 BASE_SRC="$TMPDIR/$WS_NAME-base"
 
-if [[ $PATHNAME == "-" ]]; then
+if $RECV_STDIN; then
     echo -e "\nReceiving diffs..."
     # TODO: consider format other than svn diff
     sed '/^Property changes on:/,/^$/d' | grep -v '^$' > $DIFF || exit 1
@@ -216,7 +232,7 @@ sed 's/^/  * /' $LIST
 mkdir -p $BASE_SRC || exit 1
 tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
 
-if [[ $PATHNAME == "-" ]]; then
+if $RECV_STDIN; then
     PATCH_LVL=${PATCH_LVL:-0}
 else
     echo -e "\nRetrieving diffs..."
@@ -226,11 +242,21 @@ else
     PATCH_LVL=0
 fi
 
-# Sometimes people diff with previous revision, so '-R' is needed
+# Try patch (dry-run) to detect errors and reverse patch in advance, then do
+# real patch
 #
-patch -ER -p $PATCH_LVL -d $BASE_SRC < $DIFF || {
-    echo "Warning: patch failed, possibly caused by keyword subsititution." >&2
+PATCH_OPT="-E -t -p $PATCH_LVL -d $BASE_SRC"
+PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1) || {
+    echo "$PATCH_OUTPUT" >&2
+    echo "Failed to apply patch!  Code base is not up-to-date?" >&2
+    exit 1
 }
+
+if echo "$PATCH_OUTPUT" | grep -q 'Reversed .* detected!.*Assuming -R'; then
+    REVERSE_PATCH=true
+fi
+
+patch $PATCH_OPT < $DIFF
 
 # Form codediff options
 #
@@ -255,7 +281,7 @@ This line and those below will be ignored--"
         echo -e "\n# vim:set ft=svn:" >> $COMMENT_FILE
 
         # Redirect stdin, otherwise vim complains & term corrupt after quit vim
-        [[ $PATHNAME == "-" ]] && exec < /dev/tty
+        $RECV_STDIN && exec < /dev/tty
         ${EDITOR:-vi} $COMMENT_FILE
         sed -i '/^--.*--$/, $ d' $COMMENT_FILE
     }
@@ -265,12 +291,12 @@ else
 fi
 
 [[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT="-w $WRAP_NUM"
-[[ -n "$OVERWRITE" ]] && CODEDIFF_OPT="$CODEDIFF_OPT -y"
+$OVERWRITE && CODEDIFF_OPT="$CODEDIFF_OPT -y"
 
 # Generate coderev
 #
 echo -e "\nGenerating code review..."
-if [[ $PATHNAME == "-" ]]; then
+if $RECV_STDIN && ! $REVERSE_PATCH ; then
     eval $CODEDIFF $CODEDIFF_OPT . $BASE_SRC || exit 1
 else
     eval $CODEDIFF $CODEDIFF_OPT $BASE_SRC . || exit 1
