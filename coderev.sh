@@ -12,7 +12,7 @@ if [[ -L $0 ]]; then
     # Note readlink is not compatible
     BINDIR=$(dirname $(/bin/ls -l $0 | awk -F ' -> ' '{print $2}'))
 else
-    BINDIR=$(cd $(dirname $file) && pwd -P) || exit 1
+    BINDIR=$(cd $(dirname $0) && pwd -P) || exit 1
 fi
 
 PROG_NAME=$(basename $0)
