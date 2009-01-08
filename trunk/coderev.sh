@@ -336,7 +336,7 @@ else
     CODEDIFF_OPT="$CODEDIFF_OPT -m '$COMMENTS'"
 fi
 
-[[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT="-w $WRAP_NUM"
+[[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT="$CODEDIFF_OPT -w $WRAP_NUM"
 $OVERWRITE && CODEDIFF_OPT="$CODEDIFF_OPT -y"
 
 # Generate coderev
