@@ -60,8 +60,9 @@ function cvs_get_diff
     done
     shift $((OPTIND - 1))
 
-    # Use default format to avoid keyword subsititution issue
-    cvs diff -N $diff_opt $@
+    # patch utility sometimes fails if no context line
+    # Issue 2 suffers by keywords in context
+    cvs diff -U5 $diff_opt $@
     return 0 # cvs diff return 1 when there're changes
 }
 
