@@ -57,8 +57,9 @@ function svn_get_diff
     done
     shift $((OPTIND - 1))
 
-    # Use diff -u0 to avoid keyword subsititution issue
-    svn diff  --diff-cmd /usr/bin/diff -x -U0 $diff_opt $@ \
+    # patch utility sometimes fails if no context line
+    # Issue 2 suffers by keywords in context
+    svn diff --diff-cmd /usr/bin/diff -x -U5 $diff_opt $@ \
         | sed '/^Property changes on:/,/^$/d' | grep -v '^$'
 }
 
