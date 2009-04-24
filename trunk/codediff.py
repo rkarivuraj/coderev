@@ -646,12 +646,9 @@ class CodeDiffer:
         # now wirte index page
         if self.__title:
             title = html_filter(self.__title)
-            header_info = self._header_info_template % \
-                {'header': html_filter(self.__title)}
         else:
-            title = '%s vs %s' % (self.__obj1, self.__obj2),
-            header_info = self._header_info_template % \
-                {'header': dir1 + ' vs ' + dir2}
+            title = '%s vs %s' % (self.__obj1, self.__obj2)
+        header_info = self._header_info_template % {'header': title}
 
         index = open(os.path.join(self.__output, 'index.html'), 'w')
         index.write(self._index_template % dict(
