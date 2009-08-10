@@ -42,7 +42,7 @@ function svn_get_working_revision
 
 function svn_get_active_list
 {
-    svn st $@ | grep '^[A-Z]' | awk '{print $2}'
+    svn st $@ | grep '^[A-Z]' | cut -c8-
 }
 
 function svn_get_diff
