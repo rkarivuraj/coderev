@@ -202,13 +202,6 @@ REVERSE_PATCH=false
 WRAP_NUM=
 OVERWRITE=false
 
-[[ -r ~/.coderevrc ]] && {
-    . ~/.coderevrc || {
-        echo "Reading ~/.coderevrc failed." >&2
-        exit 1
-    }
-}
-
 while getopts "F:hm:o:p:r:w:y" op; do
     case $op in
         F) COMMENT_FILE="$OPTARG" ;;
@@ -328,7 +321,15 @@ This line and those below will be ignored--"
         echo -e "\nActive file list:" >> $COMMENT_FILE
         cat $LIST | sed 's/^/  /' >> $COMMENT_FILE
         echo -e "\n# vim:set ft=svn:" >> $COMMENT_FILE
-        ${EDITOR:-vi} $COMMENT_FILE
+
+        [[ -n "$EDITOR" ]] || {
+            if which vim >/dev/null 2>&1; then
+                EDITOR=vim
+            else
+                EDITOR=vi
+            fi
+        }
+        ${EDITOR} $COMMENT_FILE
         sed -i '/^--.*--$/, $ d' $COMMENT_FILE
     }
     CODEDIFF_OPT="$CODEDIFF_OPT -F $COMMENT_FILE"
@@ -356,7 +357,7 @@ rm -rf $LIST $DIFF $BASE_SRC
 # Copy to web host if output dir is generated automatically
 #
 if [[ -z "$OUTPUT_DIR" ]]; then
-    [[ -r ~/.coderevrc ]] || {
+    [[ -r /etc/coderevrc ]] || [[ -r ~/.coderevrc ]] || {
         echo
         echo "[*] Hint: if you want to copy coderev pages to a remote host"
         echo "    automatically, see coderevrc.sample"
@@ -364,13 +365,29 @@ if [[ -z "$OUTPUT_DIR" ]]; then
         exit 0
     }
 
-    : ${WEB_HOST?"WEB_HOST not defined."}
-    : ${SSH_USER?"SSH_USER not defined."}
+    [[ -r /etc/coderevrc ]] && {
+        . /etc/coderevrc || {
+            echo "Reading /etc/coderevrc failed." >&2
+            exit 1
+        }
+    }
+
+    [[ -r ~/.coderevrc ]] && {
+        . ~/.coderevrc || {
+            echo "Reading ~/.coderevrc failed." >&2
+            exit 1
+        }
+    }
+
     : ${HOST_DIR?"HOST_DIR not defined."}
     : ${WEB_URL?"WEB_URL not defined."}
+    [[ -n $SSH_USER ]] || SSH_USER=$(whoami)
 
-    echo -e "\nCopying to ${SSH_USER}@${WEB_HOST}:$HOST_DIR/..."
-    scp -rpq $CODEREV ${SSH_USER}@${WEB_HOST}:$HOST_DIR/ || exit 1
+    LOC_PREFIX=""
+    [[ -n $WEB_HOST ]] && LOC_PREFIX="${SSH_USER}@${WEB_HOST}:"
+
+    echo -e "\nCopying to ${LOC_PREFIX}$HOST_DIR/..."
+    eval scp -rpq $CODEREV ${LOC_PREFIX}$HOST_DIR/ || exit 1
 
     echo -e "\nCoderev link:"
     echo "$WEB_URL/$(basename $CODEREV)"
