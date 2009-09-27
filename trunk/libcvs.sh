@@ -5,16 +5,6 @@
 #
 # $Id$
 
-CVS_OPS=(
-    cvs_get_banner
-    cvs_get_repository
-    cvs_get_project_path
-    cvs_get_working_revision
-    cvs_get_active_list
-    cvs_get_diff
-    cvs_get_diff_opt
-)
-
 function cvs_get_banner
 {
     echo "CVS"

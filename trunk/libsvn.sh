@@ -5,16 +5,6 @@
 #
 # $Id$
 
-SVN_OPS=(
-    svn_get_banner
-    svn_get_repository
-    svn_get_project_path
-    svn_get_working_revision
-    svn_get_active_list
-    svn_get_diff
-    svn_get_diff_opt
-)
-
 function svn_get_banner
 {
     echo "Subversion"
