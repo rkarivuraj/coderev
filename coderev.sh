@@ -137,27 +137,33 @@ function get_list_from_patch
 
 ####################  VCS Operations Begin #################### 
 
-# Return code: 0 - Unknown, 1 - SVN, 2 - CVS
+# Return string: "cvs" for CVS, "svn" for SVN, "unknown" otherwise
 #
 function detect_vcs
 {
-    [[ -f .svn/entries ]] && return 1
-    [[ -f CVS/Entries ]] && return 2
-    return 0
+    local ident=""
+
+    if [[ -f .svn/entries ]]; then
+        ident="svn"
+    elif [[ -f CVS/Entries ]]; then
+        ident="cvs"
+    else
+        ident="unknown"
+    fi
+    echo "$ident"
 }
 
 function set_vcs_ops
 {
-    local i=${1?}
-    local vcs_opt=${VCS_OPS_TABLE[i]}
+    local ident=${1?}
 
-    eval vcs_get_banner=\${$vcs_opt[0]}
-    eval vcs_get_repository=\${$vcs_opt[1]}
-    eval vcs_get_project_path=\${$vcs_opt[2]}
-    eval vcs_get_working_revision=\${$vcs_opt[3]}
-    eval vcs_get_active_list=\${$vcs_opt[4]}
-    eval vcs_get_diff=\${$vcs_opt[5]}
-    eval vcs_get_diff_opt=\${$vcs_opt[6]}
+    eval vcs_get_banner=${ident}_get_banner
+    eval vcs_get_repository=${ident}_get_repository
+    eval vcs_get_project_path=${ident}_get_project_path
+    eval vcs_get_working_revision=${ident}_get_working_revision
+    eval vcs_get_active_list=${ident}_get_active_list
+    eval vcs_get_diff=${ident}_get_diff
+    eval vcs_get_diff_opt=${ident}_get_diff_opt
 }
 
 # VCS Operations: 
@@ -169,25 +175,18 @@ function set_vcs_ops
 #   get_diff [diff_opt] pathname ...  - get diffs for active files
 #   get_diff_opt                      - print diff option and args
 
-# Unknown ops just defined here, others see libxxx.sh
-#
-UNKNOWN_OPS=( unknown_get_banner : : : : : : )
-
 function unknown_get_banner
 {
     echo "unknown"
     return 1
 }
 
-VCS_OPS_TABLE=( UNKNOWN_OPS  SVN_OPS  CVS_OPS )
-
 . $BINDIR/libsvn.sh || exit 1
 . $BINDIR/libcvs.sh || exit 1
 
 # Detect VCS (Version Control System) and set handler
 #
-detect_vcs
-set_vcs_ops $?
+set_vcs_ops $(detect_vcs)
 
 ####################  VCS Operations End #################### 
 
