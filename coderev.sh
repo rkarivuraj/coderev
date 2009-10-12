@@ -243,7 +243,7 @@ echo "  * Working revision : $WS_REV"
 # Prepare file list and base source
 #
 TMPDIR=$(mktemp -d /tmp/coderev.XXXXXX) || exit 1
-LIST="$TMPDIR/activelist"
+ACTIVE_LIST="$TMPDIR/activelist"
 DIFF="$TMPDIR/diffs"
 BASE_SRC="$TMPDIR/$WS_NAME-base"
 
@@ -257,22 +257,30 @@ if $RECV_STDIN; then
     #
     $RECV_STDIN && exec < /dev/tty
 
-    get_list_from_patch $DIFF $PATCH_LVL > $LIST || exit 1
+    get_list_from_patch $DIFF $PATCH_LVL > $ACTIVE_LIST || exit 1
 else
-    $vcs_get_active_list $PATHNAME > $LIST || exit 1
+    $vcs_get_active_list $PATHNAME > $ACTIVE_LIST || exit 1
 fi
 
-[[ -s "$LIST" ]] || {
+[[ -s "$ACTIVE_LIST" ]] || {
     echo "No active file found."
     exit 0
 }
 echo -e "\nActive file list:"
-sed 's/^/  * /' $LIST
+sed 's/^/  * /' $ACTIVE_LIST
 
 # Generate $BASE_SRC
 #
 mkdir -p $BASE_SRC || exit 1
-tar -cf - $(cat $LIST) | tar -C $BASE_SRC -xf - || exit 1
+
+SRC_LIST=""
+for f in $(cat $ACTIVE_LIST); do
+    [[ -e $f ]] && SRC_LIST+=" $f"
+done
+
+if [[ -n $SRC_LIST ]]; then
+    tar -cf - $SRC_LIST | tar -C $BASE_SRC -xf - || exit 1
+fi
 
 if $RECV_STDIN; then
     PATCH_LVL=${PATCH_LVL:-0}
@@ -280,7 +288,7 @@ else
     echo -e "\nRetrieving diffs..."
     VCS_REV_OPT=""
     [[ -n $REV_ARG ]] && VCS_REV_OPT="$($vcs_get_diff_opt $REV_ARG)"
-    $vcs_get_diff $VCS_REV_OPT $(cat $LIST) > $DIFF || exit 1
+    $vcs_get_diff $VCS_REV_OPT $(cat $ACTIVE_LIST) > $DIFF || exit 1
     # PATCH_LVL default to 0
 fi
 
@@ -295,20 +303,22 @@ PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1) || {
 }
 
 # Option "-q" of grep is not compatible
-echo "$PATCH_OUTPUT" | grep 'Reversed .* detected.*Assuming -R' >/dev/null && \
+echo "$PATCH_OUTPUT" | grep 'Reversed .* detected.*Assuming -R' >/dev/null && {
     REVERSE_PATCH=true
+    PATCH_OPT+=" -R"
+}
 patch $PATCH_OPT < $DIFF
 
 # Form codediff options
 #
-CODEDIFF_OPT="-f $LIST"
+CODEDIFF_OPT="-f $ACTIVE_LIST"
 
 CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-$(date '+%F.%H.%M.%S')
 [[ -n "$OUTPUT_DIR" ]] && CODEREV=$OUTPUT_DIR
-CODEDIFF_OPT="$CODEDIFF_OPT -o $CODEREV"
+CODEDIFF_OPT+=" -o $CODEREV"
 
 TITLE="Coderev for $(basename $(pwd)) r$WS_REV"
-CODEDIFF_OPT="$CODEDIFF_OPT -t '$TITLE'"
+CODEDIFF_OPT+=" -t '$TITLE'"
 
 if [[ -z "$COMMENTS" ]]; then
     [[ -n "$COMMENT_FILE" ]] || {
@@ -318,7 +328,7 @@ This line and those below will be ignored--"
         echo -e "\n$COMMENT_TAG" >> $COMMENT_FILE
         echo -e "\n(hint: use '-F' option for comment file)" >> $COMMENT_FILE
         echo -e "\nActive file list:" >> $COMMENT_FILE
-        cat $LIST | sed 's/^/  /' >> $COMMENT_FILE
+        cat $ACTIVE_LIST | sed 's/^/  /' >> $COMMENT_FILE
         echo -e "\n# vim:set ft=svn:" >> $COMMENT_FILE
 
         [[ -n "$EDITOR" ]] || {
@@ -331,13 +341,13 @@ This line and those below will be ignored--"
         ${EDITOR} $COMMENT_FILE
         sed -i '/^--.*--$/, $ d' $COMMENT_FILE
     }
-    CODEDIFF_OPT="$CODEDIFF_OPT -F $COMMENT_FILE"
+    CODEDIFF_OPT+=" -F $COMMENT_FILE"
 else
-    CODEDIFF_OPT="$CODEDIFF_OPT -m '$COMMENTS'"
+    CODEDIFF_OPT+=" -m '$COMMENTS'"
 fi
 
-[[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT="$CODEDIFF_OPT -w $WRAP_NUM"
-$OVERWRITE && CODEDIFF_OPT="$CODEDIFF_OPT -y"
+[[ -n "$WRAP_NUM" ]] && CODEDIFF_OPT+=" -w $WRAP_NUM"
+$OVERWRITE && CODEDIFF_OPT+=" -y"
 
 # Generate coderev
 #
@@ -347,11 +357,11 @@ if $REVERSE_PATCH ; then
 else
     eval $CODEDIFF $CODEDIFF_OPT . $BASE_SRC || exit 1
 fi
-echo -e "\nCoderev pages generated at $CODEREV"
+echo -e "\nCoderev pages generated in $CODEREV"
 
 # Cleanup
 #
-rm -rf $LIST $DIFF $BASE_SRC
+rm -rf $ACTIVE_LIST $DIFF $BASE_SRC
 
 # Copy to web host if output dir is generated automatically
 #
@@ -391,6 +401,9 @@ if [[ -z "$OUTPUT_DIR" ]]; then
     echo -e "\nCoderev link:"
     echo "$WEB_URL/$(basename $CODEREV)"
     echo
+    rm -rf $TMPDIR
+else
+    rm -rf $TMPDIR
 fi
 
 exit 0
