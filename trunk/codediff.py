@@ -388,16 +388,16 @@ class CodeDiffer:
         <td>%(pathname)s</td>
         <td><abbr title="Changed/Deleted/Added">\
                 %(changed)s/%(deleted)s/%(added)s</abbr></td>
-        <td><a href=%(pathname)s.cdiff.html title="context diff">Cdiff</a>\
+        <td><a href="%(pathname)s.cdiff.html" title="context diff">Cdiff</a>\
                 </td>
-        <td><a href=%(pathname)s.udiff.html title="unified diff">Udiff</a>\
+        <td><a href="%(pathname)s.udiff.html" title="unified diff">Udiff</a>\
                 </td>
-        <td><a href=%(pathname)s.sdiff.html title="side-by-side context diff">\
+        <td><a href="%(pathname)s.sdiff.html" title="side-by-side context diff">\
                 Sdiff</a></td>
-        <td><a href=%(pathname)s.fdiff.html title="side-by-side full diff">\
+        <td><a href="%(pathname)s.fdiff.html" title="side-by-side full diff">\
                 Fdiff</a></td>
-        <td><a href=%(pathname)s-.html title="old file">Old</a></td>
-        <td><a href=%(pathname)s.html title="new file">New</a></td>
+        <td><a href="%(pathname)s-.html" title="old file">Old</a></td>
+        <td><a href="%(pathname)s.html" title="new file">New</a></td>
     </tr>"""
 
     _deleted_data_row_template = """
@@ -408,7 +408,7 @@ class CodeDiffer:
         <td>-</td>
         <td>-</td>
         <td>-</td>
-        <td><a href=%(pathname)s-.html title="old file">Old</a></td>
+        <td><a href="%(pathname)s-.html" title="old file">Old</a></td>
         <td>-</td>
     </tr>"""
 
@@ -421,7 +421,7 @@ class CodeDiffer:
         <td>-</td>
         <td>-</td>
         <td>-</td>
-        <td><a href=%(pathname)s.html title="new file">New</a></td>
+        <td><a href="%(pathname)s.html" title="new file">New</a></td>
     </tr>"""
 
     _footer_info_template = """
