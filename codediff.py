@@ -24,7 +24,7 @@ Following templates could be customized after init:
 
 _id_ = '$Id$'
 
-import sys, os, stat, errno, time, re, difflib, filecmp
+import sys, os, stat, errno, time, re, difflib, filecmp, urllib
 
 _global_dir_ignore_list = (
     r'^CVS$',
@@ -388,16 +388,16 @@ class CodeDiffer:
         <td>%(pathname)s</td>
         <td><abbr title="Changed/Deleted/Added">\
                 %(changed)s/%(deleted)s/%(added)s</abbr></td>
-        <td><a href="%(pathname)s.cdiff.html" title="context diff">Cdiff</a>\
+        <td><a href="%(pathname_url)s.cdiff.html" title="context diff">Cdiff</a>\
                 </td>
-        <td><a href="%(pathname)s.udiff.html" title="unified diff">Udiff</a>\
+        <td><a href="%(pathname_url)s.udiff.html" title="unified diff">Udiff</a>\
                 </td>
-        <td><a href="%(pathname)s.sdiff.html" title="side-by-side context diff">\
+        <td><a href="%(pathname_url)s.sdiff.html" title="side-by-side context diff">\
                 Sdiff</a></td>
-        <td><a href="%(pathname)s.fdiff.html" title="side-by-side full diff">\
+        <td><a href="%(pathname_url)s.fdiff.html" title="side-by-side full diff">\
                 Fdiff</a></td>
-        <td><a href="%(pathname)s-.html" title="old file">Old</a></td>
-        <td><a href="%(pathname)s.html" title="new file">New</a></td>
+        <td><a href="%(pathname_url)s-.html" title="old file">Old</a></td>
+        <td><a href="%(pathname_url)s.html" title="new file">New</a></td>
     </tr>"""
 
     _deleted_data_row_template = """
@@ -408,7 +408,7 @@ class CodeDiffer:
         <td>-</td>
         <td>-</td>
         <td>-</td>
-        <td><a href="%(pathname)s-.html" title="old file">Old</a></td>
+        <td><a href="%(pathname_url)s-.html" title="old file">Old</a></td>
         <td>-</td>
     </tr>"""
 
@@ -421,7 +421,7 @@ class CodeDiffer:
         <td>-</td>
         <td>-</td>
         <td>-</td>
-        <td><a href="%(pathname)s.html" title="new file">New</a></td>
+        <td><a href="%(pathname_url)s.html" title="new file">New</a></td>
     </tr>"""
 
     _footer_info_template = """
@@ -525,6 +525,7 @@ class CodeDiffer:
         self.__file_list.sort()
 
         for f in self.__file_list:
+            f_url = urllib.quote(f)
             # set default values
             from_lines = ''
             to_lines = ''
@@ -556,7 +557,7 @@ class CodeDiffer:
                     continue
                 print
                 write_file(target + '-.html', convert_to_html(obj1))
-                data_row = self._deleted_data_row_template % {'pathname': f}
+                data_row = self._deleted_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['deleted'] += 1
                 has_diff = True
 
@@ -568,7 +569,7 @@ class CodeDiffer:
                     continue
                 print
                 write_file(target + '.html', convert_to_html(obj2))
-                data_row = self._added_data_row_template % {'pathname': f}
+                data_row = self._added_data_row_template % {'pathname': f, 'pathname_url': f_url}
                 summary['added'] += 1
                 has_diff = True
 
@@ -621,6 +622,7 @@ class CodeDiffer:
                 write_file(target + '.html', convert_to_html(obj2))
                 data_row = self._diff_data_row_template % dict(
                     pathname = f,
+                    pathname_url = f_url,
                     changed = file_summary['changed'],
                     deleted = file_summary['deleted'],
                     added = file_summary['added'],
