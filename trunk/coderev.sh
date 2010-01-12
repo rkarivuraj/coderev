@@ -162,6 +162,7 @@ function set_vcs_ops
     eval vcs_get_project_path=${ident}_get_project_path
     eval vcs_get_working_revision=${ident}_get_working_revision
     eval vcs_get_active_list=${ident}_get_active_list
+    eval vcs_is_scheduled_add=${ident}_is_scheduled_add
     eval vcs_get_diff=${ident}_get_diff
     eval vcs_get_diff_opt=${ident}_get_diff_opt
 }
@@ -172,6 +173,7 @@ function set_vcs_ops
 #   get_project_path                  - print project path without repository
 #   get_working_revision pathname ... - print working revision
 #   get_active_list pathname ...      - print active file list
+#   is_scheduled_add                  - whether a file a scheduled to add
 #   get_diff [diff_opt] pathname ...  - get diffs for active files
 #   get_diff_opt                      - print diff option and args
 
@@ -275,7 +277,13 @@ mkdir -p $BASE_SRC || exit 1
 
 SRC_LIST=""
 for f in $(cat $ACTIVE_LIST); do
-    [[ -e $f ]] && SRC_LIST+=" $f"
+    if $RECV_STDIN; then
+        [[ -e $f ]] && SRC_LIST+=" $f"  # Skip locally deleted files
+    else
+        if [[ -e $f ]] && ! $vcs_is_scheduled_add $f; then
+            SRC_LIST+=" $f"             # Skip locally deleted and added files
+        fi
+    fi
 done
 
 if [[ -n $SRC_LIST ]]; then
@@ -296,18 +304,19 @@ fi
 # real patch
 #
 PATCH_OPT="-E -t -p $PATCH_LVL -d $BASE_SRC"
-PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1) || {
-    echo "$PATCH_OUTPUT" >&2
-    echo "Failed to apply patch (dry-run), aborting..." >&2
-    exit 1
-}
-
-# Option "-q" of grep is not compatible
-echo "$PATCH_OUTPUT" | grep 'Reversed .* detected.*Assuming -R' >/dev/null && {
+PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1)
+if [[ $PATCH_OUTPUT =~ 'Reversed .* detected.*Assum.* -R' ]] || \
+    [[ $PATCH_OUTPUT =~ 'No file to patch' ]]; then
     REVERSE_PATCH=true
     PATCH_OPT+=" -R"
-}
-patch $PATCH_OPT < $DIFF
+fi
+
+PATCH_OUTPUT=$(patch $PATCH_OPT < $DIFF 2>&1)
+if [[ $PATCH_OUTPUT =~ 'FAILED -- .* reject' ]]; then
+    echo "$PATCH_OUTPUT"
+    echo "Failed to apply patch, aborting..." >&2
+    exit 1
+fi
 
 # Form codediff options
 #

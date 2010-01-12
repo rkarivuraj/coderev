@@ -35,6 +35,13 @@ function svn_get_active_list
     svn st $@ | grep '^[A-Z]' | cut -c8-
 }
 
+function svn_is_scheduled_add
+{
+    local file=${1?}
+    [[ $(svn st $file) == A* ]]
+    return $?
+}
+
 function svn_get_diff
 {
     local op diff_opt OPTIND OPTARG
