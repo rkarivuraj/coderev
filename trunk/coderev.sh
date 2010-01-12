@@ -162,7 +162,6 @@ function set_vcs_ops
     eval vcs_get_project_path=${ident}_get_project_path
     eval vcs_get_working_revision=${ident}_get_working_revision
     eval vcs_get_active_list=${ident}_get_active_list
-    eval vcs_is_scheduled_add=${ident}_is_scheduled_add
     eval vcs_get_diff=${ident}_get_diff
     eval vcs_get_diff_opt=${ident}_get_diff_opt
 }
@@ -173,7 +172,6 @@ function set_vcs_ops
 #   get_project_path                  - print project path without repository
 #   get_working_revision pathname ... - print working revision
 #   get_active_list pathname ...      - print active file list
-#   is_scheduled_add                  - whether a file a scheduled to add
 #   get_diff [diff_opt] pathname ...  - get diffs for active files
 #   get_diff_opt                      - print diff option and args
 
@@ -277,13 +275,7 @@ mkdir -p $BASE_SRC || exit 1
 
 SRC_LIST=""
 for f in $(cat $ACTIVE_LIST); do
-    if $RECV_STDIN; then
-        [[ -e $f ]] && SRC_LIST+=" $f"  # Skip locally deleted files
-    else
-        if [[ -e $f ]] && ! $vcs_is_scheduled_add $f; then
-            SRC_LIST+=" $f"             # Skip locally deleted and added files
-        fi
-    fi
+    [[ -e $f ]] && SRC_LIST+=" $f"
 done
 
 if [[ -n $SRC_LIST ]]; then
