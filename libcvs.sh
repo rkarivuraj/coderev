@@ -38,13 +38,6 @@ function cvs_get_active_list
         | awk '$4 != "Up-to-date" && $4 != "Unknown" {print $2}'
 }
 
-function cvs_is_scheduled_add
-{
-    local file=${1?}
-    [[ $(svn st $file) == A* ]]
-    return $?
-}
-
 function cvs_get_diff
 {
     local op diff_opt OPTIND OPTARG
