@@ -292,18 +292,26 @@ else
     # PATCH_LVL default to 0
 fi
 
-# Try patch (dry-run) to detect errors and reverse patch in advance, then do
-# real patch
+# If we are not receiving patch set from stdin and not using "-r" option, it
+# then means we are working on patch set from default "<vcs> diff", in this
+# case "patch -R" is required, otherwise we try patch (dry-run) to detect
+# errors and reverse patch in advance, then do real patch
 #
 PATCH_OPT="-E -t -p $PATCH_LVL -d $BASE_SRC"
-PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1)
-if [[ $PATCH_OUTPUT =~ 'Reversed .* detected.*Assum.* -R' ]] || \
-    [[ $PATCH_OUTPUT =~ 'No file to patch' ]]; then
+if ! $RECV_STDIN && [[ -z $REV_ARG ]]; then
     REVERSE_PATCH=true
     PATCH_OPT+=" -R"
+else
+    PATCH_OUTPUT=$(patch $PATCH_OPT --dry-run < $DIFF 2>&1)
+    if [[ $PATCH_OUTPUT =~ 'Reversed .* detected.*Assum.* -R' ]] || \
+        [[ $PATCH_OUTPUT =~ 'No file to patch' ]]; then
+        REVERSE_PATCH=true
+        PATCH_OPT+=" -R"
+    fi
 fi
 
-PATCH_OUTPUT=$(patch $PATCH_OPT < $DIFF 2>&1)
+# Do real patch with option "-f" (force)
+PATCH_OUTPUT=$(patch $PATCH_OPT -f < $DIFF 2>&1)
 if [[ $PATCH_OUTPUT =~ 'FAILED -- .* reject' ]]; then
     echo "$PATCH_OUTPUT"
     echo "Failed to apply patch, aborting..." >&2
