@@ -23,10 +23,10 @@ function help
     cat << EOF
 
 Usage:
-    $PROG_NAME [-r revision] [-w width] [-o outdir] [-y] \\
+    $PROG_NAME [-r revision] [-w width] [-o outdir] [-y] [-d name] \\
                [-F comment-file | -m 'comment...'] [file...]
 
-    $PROG_NAME [-r revision] [-w width] [-o outdir] [-y] \\
+    $PROG_NAME [-r revision] [-w width] [-o outdir] [-y] [-d name] \\
                [-F comment-file | -m 'comment...'] [-p num] < patch-file
 
     All options are optional.
@@ -40,6 +40,9 @@ Usage:
     -o outdir       - The output dir to save code review pages
 
     -y              - Force overwrite if outdir alredy exists
+
+    -d name         - Use this name instead of a dynamically timestamp string
+                      as coderev directory basename
 
     -F comment-file - A file to read comments from
 
@@ -192,6 +195,7 @@ set_vcs_ops $(detect_vcs)
 
 # Main Proc
 #
+CODEREV_NAME=
 COMMENT_FILE=
 COMMENTS=
 OUTPUT_DIR=
@@ -201,8 +205,9 @@ REVERSE_PATCH=false
 WRAP_NUM=
 OVERWRITE=false
 
-while getopts "F:hm:o:p:r:w:y" op; do
+while getopts "d:F:hm:o:p:r:w:y" op; do
     case $op in
+        d) CODEREV_NAME="$OPTARG" ;;
         F) COMMENT_FILE="$OPTARG" ;;
         h) help; exit 0 ;;
         m) COMMENTS="$OPTARG" ;;
@@ -322,7 +327,11 @@ fi
 #
 CODEDIFF_OPT="-f $ACTIVE_LIST"
 
-CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-$(date '+%F.%H.%M.%S')
+if [[ -n $CODEREV_NAME ]]; then
+    CODEREV=$TMPDIR/$CODEREV_NAME
+else
+    CODEREV=$TMPDIR/${WS_NAME}-r${WS_REV}-$(date '+%F.%H.%M.%S')
+fi
 [[ -n "$OUTPUT_DIR" ]] && CODEREV=$OUTPUT_DIR
 CODEDIFF_OPT+=" -o $CODEREV"
 
